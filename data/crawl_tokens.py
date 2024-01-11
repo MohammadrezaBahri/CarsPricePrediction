@@ -1,88 +1,38 @@
-import aiohttp
 import asyncio
-import json
-import logging
-import config   
-import time
-from datetime import datetime
-import psycopg2 
+import timeit
+import aiohttp
 
-logging.basicConfig(filename='logs/crawl_tokens_log.txt', 
-                    level=logging.ERROR, 
-                    format='%(asctime)s - %(levelname)s - %(message)s')
+from config import PAGES_FOR_CRAWL_BATCH_QUANTITY
+from crawling_logger import tokens_info_logger as logger
+from database import insert_tokens_into_database
+from process_requests import crawl_page
 
-def insert_tokens_into_database(tokens):
-    try:
-        conn = psycopg2.connect(**config.db_params)
-        cursor = conn.cursor()
-
-        # Insert token into the 'tokens' table
-        insert_query = 'INSERT INTO divar_cars_data.tokens ("token") VALUES '
-        for i, token in enumerate(tokens):
-            insert_query += f"{',' if i > 0 else ''}('{token}')"
-
-        insert_query += ' ON CONFLICT DO NOTHING'
-
-        cursor.execute(insert_query)
-
-        conn.commit()
-
-    except Exception as e:
-        logging.error(f"Error inserting tokens into the database: {e}")
-
-    finally:
-        cursor.close()
-        conn.close()
-
-async def crawl_website(session, url, payload):
-    tokens = []
-
-    try:
-        async with session.post(url=url, data=payload) as response:
-            if response.status == 200:
-                try:
-                    # Extract tokens from the response JSON
-                    post_list = (await response.json())['web_widgets']['post_list']
-                    for post in post_list:
-                        token = post['data'].get('token')
-                        if token:
-                            tokens.append(token)
-                except KeyError as e:
-                    error_message = f"Error extracting tokens: {e}. Check the structure of the response JSON."
-                    logging.error(error_message)
-            else:
-                error_message = f"Request failed with status code {response.status}"
-                logging.error(error_message)
-
-    except Exception as e:
-        error_message = f"Error during request: {e}"
-        logging.error(error_message)
-
-    return tokens
 
 async def main():
-    url = config.URL
-    num_requests = config.PAGES_FOR_CRAWL_BATCH_QUANTITY  
+    num_requests = PAGES_FOR_CRAWL_BATCH_QUANTITY  
+
+    logger.info(f"crawling {num_requests} pages\n{'-'*50}")
 
     async with aiohttp.ClientSession() as session:
-        tasks = []
-        for page in range(1, num_requests + 1):
-            payload = config.get_payload(page)
-            tasks.append(crawl_website(session, url, payload))
+        tasks = [crawl_page(session, page) for page in range(1, num_requests + 1)]
 
-        start_time = time.time()
+        start_time = timeit.default_timer()
         results = await asyncio.gather(*tasks)
-        end_time = time.time()
+        end_time = timeit.default_timer()
 
         # Concatenate the tokens from all requests into a single list
         all_tokens = [token for tokens in results for token in tokens]
 
-        # Insert tokens into the 'tokens' table in the PostgreSQL database
-        insert_tokens_into_database(all_tokens)
+        logger.info(f"Total requests time: {end_time - start_time} seconds")
+        logger.info(f"{len(all_tokens)} results was found\n{'-'*50}")
 
-        # Log the execution time
-        execution_time = end_time - start_time
-        logging.info(f"Total execution time: {execution_time} seconds")
+        # Insert tokens into the 'tokens' table in the PostgreSQL database
+        logger.info(f'inserting {len(all_tokens)} tokens into the database')
+        start_time = timeit.default_timer()
+        insert_tokens_into_database(all_tokens)
+        end_time = timeit.default_timer()
+        logger.info(f"Total insertion time: {end_time - start_time} seconds for {len(all_tokens)} tokens\n{'-'*50}")
+
 
 if __name__ == "__main__":
     loop = asyncio.get_event_loop()

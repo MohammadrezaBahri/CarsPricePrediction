@@ -1,4 +1,7 @@
 venv
 logs
 **/__pycache__
-backend
+**/test*.py
+database_config.py
+*.sql
+*.txt

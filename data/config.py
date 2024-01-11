@@ -88,13 +88,6 @@ def get_payload(page):
                 "page": {page}
             }}"""
 
-db_params = {
-    'dbname': 'fast_api_5wv3',
-    'user': 'roham_bahri',
-    'password': 'NXpR3wUZ6n9LUxP6iBg0gHftzHMZua4q',
-    'host': 'dpg-clo7eu4jtl8s73al5l5g-a.frankfurt-postgres.render.com',
-    'port': '5432'
-}
 
 class PostAttributes(Enum):
     usage = 'کارکرد'
@@ -108,5 +101,3 @@ class PostAttributes(Enum):
     chassis_status = 'وضعیت شاسی‌ها'
     fuel_type = 'نوع سوخت'
     gearbox = 'نوع گیربکس'
-
-schema_place = "['schema']['json_schema']['properties']"
